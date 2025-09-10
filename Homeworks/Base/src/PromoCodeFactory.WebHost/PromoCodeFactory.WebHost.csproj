@@ -7,6 +7,10 @@
     </PropertyGroup>
 
     <ItemGroup>
+      <None Include="Models\UpdateEmployeeDto.cs" />
+    </ItemGroup>
+
+    <ItemGroup>
       <PackageReference Include="NSwag.AspNetCore" Version="14.0.7" />
     </ItemGroup>
 

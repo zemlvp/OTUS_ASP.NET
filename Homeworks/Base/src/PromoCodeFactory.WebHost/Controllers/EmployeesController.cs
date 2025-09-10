@@ -7,68 +7,138 @@ using PromoCodeFactory.Core.Abstractions.Repositories;
 using PromoCodeFactory.Core.Domain.Administration;
 using PromoCodeFactory.WebHost.Models;
 
-namespace PromoCodeFactory.WebHost.Controllers
+namespace PromoCodeFactory.WebHost.Controllers;
+
+/// <summary>
+/// Сотрудники
+/// </summary>
+[ApiController]
+[Route("api/v1/[controller]")]
+public class EmployeesController : ControllerBase
 {
-    /// <summary>
-    /// Сотрудники
-    /// </summary>
-    [ApiController]
-    [Route("api/v1/[controller]")]
-    public class EmployeesController : ControllerBase
+    private readonly IRepository<Employee> _employeeRepository;
+    private readonly IRepository<Role> _roleRepository;
+
+    public EmployeesController(IRepository<Employee> employeeRepository, IRepository<Role> roleRepository)
     {
-        private readonly IRepository<Employee> _employeeRepository;
+        _employeeRepository = employeeRepository;
+        _roleRepository = roleRepository;
+    }
 
-        public EmployeesController(IRepository<Employee> employeeRepository)
+    /// <summary>
+    /// Получить данные всех сотрудников
+    /// </summary>
+    /// <returns></returns>
+    [HttpGet]
+    public async Task<List<EmployeeShortResponse>> GetEmployeesAsync()
+    {
+        var employees = await _employeeRepository.GetAllAsync();
+
+        var employeesModelList = employees.Select(x =>
+            new EmployeeShortResponse(x.Id, x.FullName, x.Email)).ToList();
+
+        return employeesModelList;
+    }
+
+    /// <summary>
+    /// Получить данные сотрудника по Id
+    /// </summary>
+    /// <returns></returns>
+    [HttpGet("{id:guid}")]
+    public async Task<ActionResult<EmployeeResponse>> GetEmployeeByIdAsync(Guid id)
+    {
+        var employee = await _employeeRepository.GetByIdAsync(id);
+
+        if (employee == null)
+            return NotFound();
+
+        var employeeModel = new EmployeeResponse(employee.Id, employee.FullName, employee.Email, employee.Roles.Select(x => new RoleItemResponse()
         {
-            _employeeRepository = employeeRepository;
+            Name = x.Name,
+            Description = x.Description
+        }).ToList(), employee.AppliedPromocodesCount);
+
+        return employeeModel;
+    }
+
+    /// <summary>
+    /// Добавить сотрудника
+    /// </summary>
+    /// <param name="employeeDto">Данные сотрудника</param>
+    /// <returns></returns>
+    [HttpPost()]
+    public async Task<ActionResult<Guid>> AddEmployeeAsync(AddEmployeeDto employeeDto)
+    {
+        var roles = new List<Role>();
+
+        foreach (var roleId in employeeDto.RolesId)
+        {
+            var role = await _roleRepository.GetByIdAsync(roleId);
+
+            if (role == null)            
+                return NotFound($"Роль с Id={roleId} не найдена");            
+
+            roles.Add(role);
         }
 
-        /// <summary>
-        /// Получить данные всех сотрудников
-        /// </summary>
-        /// <returns></returns>
-        [HttpGet]
-        public async Task<List<EmployeeShortResponse>> GetEmployeesAsync()
+        var employee = new Employee
         {
-            var employees = await _employeeRepository.GetAllAsync();
+            FirstName = employeeDto.FirstName,
+            LastName = employeeDto.LastName,
+            Email = employeeDto.Email,
+            Roles = roles,
+            AppliedPromocodesCount = employeeDto.AppliedPromocodesCount
+        };
 
-            var employeesModelList = employees.Select(x =>
-                new EmployeeShortResponse()
-                {
-                    Id = x.Id,
-                    Email = x.Email,
-                    FullName = x.FullName,
-                }).ToList();
+        employee.Id = await _employeeRepository.AddAsync(employee);
 
-            return employeesModelList;
+        return Ok(employee.Id);
+    }
+
+    /// <summary>
+    /// Обновить сотрудника
+    /// </summary>
+    /// <param name="id">id сотрудника</param>
+    /// <param name="employeeDto">Данные сотрудника</param>
+    /// <returns></returns>
+    [HttpPut("{id:guid}")]
+    public async Task<ActionResult<Guid>> UpdateEmployeeAsync(Guid id, UpdateEmployeeDto employeeDto)
+    {
+        var roles = new List<Role>();
+
+        foreach (var roleId in employeeDto.RolesId)
+        {
+            var role = await _roleRepository.GetByIdAsync(roleId);
+
+            if (role == null)            
+                return NotFound($"Роль с Id={roleId} не найдена");            
+
+            roles.Add(role);
         }
 
-        /// <summary>
-        /// Получить данные сотрудника по Id
-        /// </summary>
-        /// <returns></returns>
-        [HttpGet("{id:guid}")]
-        public async Task<ActionResult<EmployeeResponse>> GetEmployeeByIdAsync(Guid id)
-        {
-            var employee = await _employeeRepository.GetByIdAsync(id);
+        var employeeExisted = await _employeeRepository.GetByIdAsync(id);
 
-            if (employee == null)
-                return NotFound();
+        employeeExisted.FirstName = employeeDto.FirstName;
+        employeeExisted.LastName = employeeDto.LastName;
+        employeeExisted.Email = employeeDto.Email;
+        employeeExisted.Roles = roles;
+        employeeExisted.AppliedPromocodesCount = employeeDto.AppliedPromocodesCount;
 
-            var employeeModel = new EmployeeResponse()
-            {
-                Id = employee.Id,
-                Email = employee.Email,
-                Roles = employee.Roles.Select(x => new RoleItemResponse()
-                {
-                    Name = x.Name,
-                    Description = x.Description
-                }).ToList(),
-                FullName = employee.FullName,
-                AppliedPromocodesCount = employee.AppliedPromocodesCount
-            };
+        await _employeeRepository.UpdateAsync(id, employeeExisted);
 
-            return employeeModel;
-        }
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Удалить сотрудника
+    /// </summary>
+    /// <param name="id">ИД сотрудника</param>
+    /// <returns></returns>
+    [HttpDelete("{id:guid}")]
+    public async Task<ActionResult<Guid>> DeleteEmployeeAsync(Guid id)
+    {
+        await _employeeRepository.DeleteAsync(id);
+
+        return NoContent();
     }
 }
